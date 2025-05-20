@@ -173,6 +173,56 @@ public class UserController : ControllerBase
         }
     }
 
+     [HttpPost("AddFavoriteTVShow/{tvShowName}/{userEmail}")]
+    public async Task<ActionResult> AddFavoriteTVShow(string tvShowName, string userEmail)
+    {
+        try
+        {
+            using var session = _neo4jDriver.AsyncSession();
+
+            
+            var movieCheckQuery = @"
+                MATCH (t:TVShow {Name: $tvShowName})
+                RETURN t";
+            var movieResult = await session.RunAsync(movieCheckQuery, new { tvShowName });
+            if (!await movieResult.FetchAsync())
+            {
+                return NotFound($"TVShow with the name {tvShowName} does not exist.");
+            }
+
+            
+            var checkQuery = @"
+                MATCH (u:User {Email: $userEmail})-[r:FAVORITE]->(t:TVShow {Name: $tvShowName})
+                RETURN r";
+            var checkResult = await session.RunAsync(checkQuery, new
+            {
+                tvShowName,
+                userEmail
+            });
+
+            if (await checkResult.FetchAsync())
+            {
+                return BadRequest("TVShow is already marked as favorite");
+            }
+
+            
+            var query = @"
+                MATCH (t:TVShow {Name: $tvShowName})
+                MATCH (u:User {Email: $userEmail})
+                MERGE (u)-[:FAVORITE]->(t)";
+            await session.RunAsync(query, new {
+                tvShowName,
+                userEmail
+            });
+
+            return Ok("TVShow has been successfully added to the favorites");
+        }
+        catch (Exception e)
+        {
+            return BadRequest(e.Message);
+        }
+    }
+
     [HttpPost("RemoveFavoriteMovie/{movieName}/{userEmail}")]
     public async Task<ActionResult> RemoveFavoriteMovie(string movieName, string userEmail)
     {
